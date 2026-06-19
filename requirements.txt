@@ -1,2 +1,5 @@
 Pillow
 pystray
+pdf2docx
+docx2pdf
+rembg[cpu]
