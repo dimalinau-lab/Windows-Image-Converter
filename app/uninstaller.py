@@ -42,8 +42,12 @@ def uninstall():
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     if is_admin():
         uninstall()
     else:
-        # Если запустили без админки - просим права для удаления
+        import ctypes
+        import sys
         ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{__file__}"', None, 1)
