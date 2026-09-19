@@ -1,13 +1,5 @@
 import winreg
-import sys
 import ctypes
-
-
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
 
 
 def delete_registry_tree(hkey, subkey):
@@ -21,9 +13,7 @@ def delete_registry_tree(hkey, subkey):
             delete_registry_tree(hkey, subkey + "\\" + sub_name)
         except OSError:
             break
-
     winreg.CloseKey(key)
-
     try:
         winreg.DeleteKey(hkey, subkey)
     except OSError:
@@ -31,23 +21,28 @@ def delete_registry_tree(hkey, subkey):
 
 
 def uninstall():
-    main_key_path = r"SystemFileAssociations\image\shell\MyPyConverter"
+    root = winreg.HKEY_CURRENT_USER
 
+    # 1. Удаляем контекстные меню
+    keys_to_remove = [
+        r"Software\Classes\SystemFileAssociations\image\shell\PyWIC",
+        r"Software\Classes\PyWIC",
+        r"Software\Classes\SystemFileAssociations\.pdf\shell\PyWICPdf",
+        r"Software\Classes\SystemFileAssociations\.docx\shell\PyWICDoc"
+    ]
+    for path in keys_to_remove:
+        delete_registry_tree(root, path)
+
+    # 2. Удаляем из автозагрузки, если была включена
     try:
-        delete_registry_tree(winreg.HKEY_CLASSES_ROOT, main_key_path)
-        ctypes.windll.user32.MessageBoxW(0, "Конвертер успешно удален из контекстного меню Windows!",
-                                         "Удаление завершено", 0x40)
-    except Exception as e:
-        ctypes.windll.user32.MessageBoxW(0, f"Ошибка при очистке реестра: {e}", "Ошибка", 0x10)
+        key = winreg.OpenKey(root, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
+        winreg.DeleteValue(key, "PyWICConverter")
+        winreg.CloseKey(key)
+    except OSError:
+        pass
+
+    ctypes.windll.user32.MessageBoxW(0, "Пункты Converter успешно удалены из Windows!", "Удаление завершено", 0x40)
 
 
 if __name__ == "__main__":
-    import multiprocessing
-    multiprocessing.freeze_support()
-
-    if is_admin():
-        uninstall()
-    else:
-        import ctypes
-        import sys
-        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{__file__}"', None, 1)
+    uninstall()
