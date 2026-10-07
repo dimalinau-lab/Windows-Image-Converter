@@ -2,4 +2,5 @@ Pillow
 pystray
 pdf2docx
 docx2pdf
+pywin32
 rembg[cpu]

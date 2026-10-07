@@ -30,12 +30,25 @@ def get_base_cmd():
     return f'"{pythonw_exe}" "{main_script}"'
 
 
+def get_icon_path():
+    """Возвращает путь к иконке для контекстного меню Windows."""
+    if getattr(sys, 'frozen', False):
+        return sys.executable
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    ico_path = os.path.abspath(os.path.join(current_dir, "..", "assets", "icon.ico"))
+    if os.path.exists(ico_path):
+        return ico_path
+    return ""
+
+
 def needs_install():
     """
     Проверяет, нужно ли прописывать/обновлять реестр:
     1. Существует ли пункт в реестре.
     2. Совпадает ли путь запуска.
     3. Соответствует ли название новому ('Converter' вместо старого).
+    4. Зарегистрирован ли пункт для .doc.
     """
     base_cmd = get_base_cmd()
     expected_sample_cmd = f'{base_cmd} "%1" png'
@@ -51,9 +64,16 @@ def needs_install():
 
         # Проверяем команду запуска первого действия
         cmd_key = winreg.OpenKey(root_key, r"Software\Classes\PyWIC\shell\cmd1\command")
-        cmd_val = winreg.QueryValue(cmd_key, "")  # Исправлено: QueryValue возвращает только строку
+        cmd_val = winreg.QueryValue(cmd_key, "")
         winreg.CloseKey(cmd_key)
         if cmd_val != expected_sample_cmd:
+            return True
+
+        # Проверяем регистрацию для формата .doc
+        doc_key = winreg.OpenKey(root_key, r"Software\Classes\SystemFileAssociations\.doc\shell\PyWICDoc\command")
+        doc_val = winreg.QueryValue(doc_key, "")
+        winreg.CloseKey(doc_key)
+        if doc_val != f'{base_cmd} "%1" pdf':
             return True
 
         return False
@@ -64,6 +84,7 @@ def needs_install():
 def install(silent=False):
     try:
         base_cmd = get_base_cmd()
+        icon_path = get_icon_path()
         root_key = winreg.HKEY_CURRENT_USER
         base_path = r"Software\Classes"
 
@@ -72,9 +93,11 @@ def install(silent=False):
         key_main = winreg.CreateKey(root_key, img_path)
         winreg.SetValueEx(key_main, "MUIVerb", 0, winreg.REG_SZ, "Converter")
         winreg.SetValueEx(key_main, "ExtendedSubCommandsKey", 0, winreg.REG_SZ, r"PyWIC")
+        if icon_path:
+            winreg.SetValueEx(key_main, "Icon", 0, winreg.REG_SZ, icon_path)
         winreg.CloseKey(key_main)
 
-        # Подпункты
+        # Подпункты картинок
         cmds_path = rf"{base_path}\PyWIC\shell"
         formats = [
             ("cmd1", "В формат PNG", "png"),
@@ -98,15 +121,30 @@ def install(silent=False):
         pdf_path = rf"{base_path}\SystemFileAssociations\.pdf\shell\PyWICPdf"
         pdf_main = winreg.CreateKey(root_key, pdf_path)
         winreg.SetValue(pdf_main, "", winreg.REG_SZ, "Конвертировать в DOCX")
+        if icon_path:
+            winreg.SetValueEx(pdf_main, "Icon", 0, winreg.REG_SZ, icon_path)
         pdf_cmd = winreg.CreateKey(pdf_main, "command")
         winreg.SetValue(pdf_cmd, "", winreg.REG_SZ, f'{base_cmd} "%1" docx')
         winreg.CloseKey(pdf_cmd)
         winreg.CloseKey(pdf_main)
 
         # DOCX пункт
-        doc_path = rf"{base_path}\SystemFileAssociations\.docx\shell\PyWICDoc"
+        docx_path = rf"{base_path}\SystemFileAssociations\.docx\shell\PyWICDoc"
+        docx_main = winreg.CreateKey(root_key, docx_path)
+        winreg.SetValue(docx_main, "", winreg.REG_SZ, "Конвертировать в PDF")
+        if icon_path:
+            winreg.SetValueEx(docx_main, "Icon", 0, winreg.REG_SZ, icon_path)
+        docx_cmd = winreg.CreateKey(docx_main, "command")
+        winreg.SetValue(docx_cmd, "", winreg.REG_SZ, f'{base_cmd} "%1" pdf')
+        winreg.CloseKey(docx_cmd)
+        winreg.CloseKey(docx_main)
+
+        # DOC пункт (классический формат Word)
+        doc_path = rf"{base_path}\SystemFileAssociations\.doc\shell\PyWICDoc"
         doc_main = winreg.CreateKey(root_key, doc_path)
         winreg.SetValue(doc_main, "", winreg.REG_SZ, "Конвертировать в PDF")
+        if icon_path:
+            winreg.SetValueEx(doc_main, "Icon", 0, winreg.REG_SZ, icon_path)
         doc_cmd = winreg.CreateKey(doc_main, "command")
         winreg.SetValue(doc_cmd, "", winreg.REG_SZ, f'{base_cmd} "%1" pdf')
         winreg.CloseKey(doc_cmd)
